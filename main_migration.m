@@ -32,7 +32,6 @@
 % The user is further guided through the script by comments around the
 % code.
 % 
-% Wrıtten by: Sinan Yıldırım, Ozan Aksoy
 % Last update: 18 June 2020
 
 %%
@@ -66,7 +65,7 @@ N = 81; % number of provinces
 %% Algorithm specifications: Choose factors, algorithms to run, algorithm parameters, etc
 algorithms_to_run = [1 1 1]; % make the corresponding index one for the 
 % algorithms you want to run
-M_vec = [500000 500000 500000]; % numbers of iterations
+M_vec = [1000 1000 1000]; % numbers of iterations
 m_burn = round(M_vec/5);
 run_empty = 0; % make this 1 if you want to run the empty model
 

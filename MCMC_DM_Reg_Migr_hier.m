@@ -53,7 +53,7 @@ thetaha = Theta_init{7};
 thetahb = Theta_init{8};
 
 % initialise the log-likelihood
-[log_lkl, log_lkl_vec] = calculate_log_lkl_goc(Y, U, V, Z, Theta_init,...
+[log_lkl, log_lkl_vec] = calculate_log_lkl_migration(Y, U, V, Z, Theta_init,...
     T, N, L, 2);
 
 % initialise the log-priors
@@ -85,7 +85,7 @@ for m = 1:M
     Theta_prop = {theta1_prop, theta2_prop, theta3_prop, theta4_prop, theta0a, theta0b};
     
     % calculate the log-likelihood
-    [log_lkl_prop, log_lkl_vec_prop] = calculate_log_lkl_goc(Y, U, V, Z, ...
+    [log_lkl_prop, log_lkl_vec_prop] = calculate_log_lkl_migration(Y, U, V, Z, ...
         Theta_prop, T, N, L, 2);
         
     log_r = log_lkl_prop - log_lkl;
@@ -106,7 +106,7 @@ for m = 1:M
     
     % calculate the log-likelihood
     Theta_prop = {theta1, theta2, theta3, theta4, theta0a_prop, theta0b};
-    [~, log_lkl_vec_prop] = calculate_log_lkl_goc(Y, U, V, Z, Theta_prop,...
+    [~, log_lkl_vec_prop] = calculate_log_lkl_migration(Y, U, V, Z, Theta_prop,...
         T, N, L, 2);
     
     % calculate the log-prior vector
@@ -128,7 +128,7 @@ for m = 1:M
     
     % calculate the log-likelihood
     Theta_prop = {theta1, theta2, theta3, theta4, theta0a, theta0b_prop};
-    [~, log_lkl_vec_prop] = calculate_log_lkl_goc(Y, U, V, Z, Theta_prop,...
+    [~, log_lkl_vec_prop] = calculate_log_lkl_migration(Y, U, V, Z, Theta_prop,...
         T, N, L, 2);
     
     % calculate the log-prior vector

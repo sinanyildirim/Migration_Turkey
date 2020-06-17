@@ -33,7 +33,7 @@ sigma_prop = prop_params.sigma_prop;
 sigma0_a_prop = prop_params.sigma0_a_prop;
 sigma0_b_prop = prop_params.sigma0_b_prop;
 
-log_lkl = calculate_log_lkl_goc(Y, U, V, Z, Theta_init, T, N, L, 1);
+log_lkl = calculate_log_lkl_migration(Y, U, V, Z, Theta_init, T, N, L, 1);
 
 %%
 
@@ -55,7 +55,7 @@ for m = 1:M
     % calculate the log-likelihood
     Theta_prop = {theta1_prop, theta2_prop, theta3_prop, theta0a_prop, theta0b_prop};
     
-    [log_lkl_prop] = calculate_log_lkl_goc(Y, U, V, Z, Theta_prop, T, N, L, 1);
+    [log_lkl_prop] = calculate_log_lkl_migration(Y, U, V, Z, Theta_prop, T, N, L, 1);
         
     % acceptance ratio    
     log_r = log_lkl_prop - log_lkl;
