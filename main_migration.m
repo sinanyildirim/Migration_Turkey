@@ -1,30 +1,33 @@
-clear all; clc; close all; fc = 0;
+clear; clc; close all; fc = 0;
 
-%% load the data
-import_secim2004;
-import_secim2009;
-import_secim2014;
-import_gsyh; % 2004 to 2017
-import_nufus_data; % 2008 to 2018
-import_girisim; % 2009 to 2017
-import_goc_data; % 2008 to 2018
-import_issizlik_data; % 2004 to 2019
-import_AKP; % 2007 to 2019
-import_Kurd; % 2008
-import_betweenness; % 2008 to 2019
-import_correlations; % 2008 to 2019
+Outputdirname = 'Outputfiles/'; % This is where the output files are going to be saved
+if ~exist(Outputdirname, 'dir')
+   mkdir(Outputdirname)
+end
 
-% NAN cells are converted to 0.
-Goc(isnan(Goc)) = 0;
+%% load the data from the data files
+load('Datafiles/external_data', 'ilmesafe_abc_abc', 'Iller');
+[Election2004, Election2009, Election2014] = import_election;
+[GDP, GDP_years] = import_gdp;
+[Population, Population_years] = import_population;
+[Migration, Migration_years] = import_migration;
+% NAN cells in the migration data are converted to 0.
+Migration(isnan(Migration)) = 0;
+[Unemployment, Unemployment_years] = import_unemployment;
+[AKP, AKP_years] = import_AKP;
+[Kurd] = import_Kurd;
+[Betweenness, Betweenness_years] = import_betweenness;
+[Correlations, Correlations_years] = import_correlations;
 
-load('ilmeseafe_data.mat');
+N = 81; % number of provinces
 
-N = 81;
-%%
-algorithms_to_run = [0 0 1];
-M_vec = [100000 500000 500000];
+%% Algorithm specifications: Choose factors, algorithms to run, algorithm parameters, etc
 
-%% U, V, Z, and Y are formed
+algorithms_to_run = [1 1 1]; % make the corresponding index one for the 
+% algorithms you want to run
+M_vec = [1000 1000 1000]; % numbers of iterations
+m_burn = round(M_vec/5);
+run_empty = 0; % make this 1 if you want to run the empty model
 
 Years_all = 2004:2018;
 L_y = length(Years_all);
@@ -33,9 +36,10 @@ V_all = cell(1, L_y);
 Y_all = cell(1, L_y);
 Z_all = cell(1, L_y);
 
-lu_ind = 0;
-lv_ind = 0;
-lz_ind = 0;
+% Select the year range
+actual_year_range = 2009:2018;
+year_range = actual_year_range - (Years_all(1)-1);
+T = year_range(end) - year_range(1) + 1;
 
 one_way_factors_u = {'GDP -->', 'Unemployment -->', 'AKP -->', ...
     'Popularity -->', 'Log-population -->', 'Betweenness -->', 'Kurd -->'};
@@ -44,14 +48,16 @@ one_way_factors_v = {'GDP <--', 'Unemployment <--', 'AKP <--', ...
 two_way_factors = {'Political distance <-->', 'Spatial distance <-->', ...
     'Previous year <-->', 'Reciprocity <-->', 'In-flow similarity <-->'};
 
-% select_vec_U = [1 1 1 0 1 1 1];
-% select_vec_V = [1 1 1 1 1 1 1];
-% select_vec_Z = [1 1 1 1 1];
+if run_empty == 0 % select the factors to be included here
+    select_vec_U = [1 1 1 0 1 1 1];
+    select_vec_V = [1 1 1 1 1 1 1];
+    select_vec_Z = [1 1 1 1 1];
+else % activate this for the empty model (for minimal computation)
+    select_vec_U = [1 0 0 0 0 0 0];
+    select_vec_V = [1 0 0 0 0 0 0];
+    select_vec_Z = [1 0 0 0 0];
+end
 
-% run this for the empty model (for minimal computation)
-select_vec_U = [1 0 0 0 0 0 0];
-select_vec_V = [1 0 0 0 0 0 0];
-select_vec_Z = [1 0 0 0 0];
 selected_factors_U = find(select_vec_U);
 selected_factors_V = find(select_vec_V);
 
@@ -60,56 +66,43 @@ legends_U = one_way_factors_u(select_vec_U == 1);
 legends_V = one_way_factors_v(select_vec_V == 1);
 legends_Z = two_way_factors(select_vec_Z == 1);
 
+K1 = sum(select_vec_U);
+K2 = sum(select_vec_V);
+L = sum(select_vec_Z);
+
+legends{1} = [legends_U, legends_V, legends_Z, 'intercept', 'time slope'];
+legends{2} = [legends_U, legends_V, legends_Z, 'scale parameter', 'intercept', 'time slope'];
+legends{3} = [legends_U, legends_V, legends_Z, 'scale parameter'];
+
+%% Factors U, V, Z, and observed migration Y are formed
 for t = 1:L_y
     year = Years_all(t);
     U_all{t} = [];
     V_all{t} = [];
     
-    %%%%%%%%%%%%%%%%%%% GSYH  %%%%%%%%%%%%%%%%%%%
-    ind = find(GSYH_years == year-1);
+    %%%%%%%%%%%%%%%%%%% GDP  %%%%%%%%%%%%%%%%%%%
+    ind = find(GDP_years == year-1);
     if select_vec_U(1) == 1
         if isempty(ind) == 0
-            U_all{t} = [U_all{t} GSYH(:, ind)];
+            U_all{t} = [U_all{t} GDP(:, ind)];
         end
     end
     if select_vec_V(1) == 1
         if isempty(ind) == 0
-            V_all{t} = [V_all{t} GSYH(:, ind)];
+            V_all{t} = [V_all{t} GDP(:, ind)];
         end
     end
     
-%     %%%%%%%%%%%%%%%%%%% Issizlik %%%%%%%%%%%%%%%%%%%
-%     ind1 = find(Issizlik_years == year-1);
-%     ind2 = find(Issizlik_years == year-2);
-%     if select_vec_U(2) == 1
-%         if (isempty(ind1) == 0)
-%             if (isempty(ind2) == 0)
-%                 U_all{t} = [U_all{t} Issizlik_iller(:, ind1) - Issizlik_iller(:, ind2)];
-%             else
-%                 U_all{t} = [U_all{t} zeros(N, 1)];
-%             end
-%         end
-%     end
-%     if select_vec_V(2) == 1
-%         if (isempty(ind1) == 0)
-%             if (isempty(ind2) == 0)
-%                 V_all{t} = [V_all{t} Issizlik_iller(:, ind1) - Issizlik_iller(:, ind2)];
-%             else
-%                 V_all{t} = [V_all{t} zeros(N, 1)];
-%             end
-%         end
-%     end
-%     
-    %%%%%%%%%%%%%%%%%%% Issizlik %%%%%%%%%%%%%%%%%%%
-    ind = find(Issizlik_years == year-1);
+    %%%%%%%%%%%%%%%%%%% Unemployment %%%%%%%%%%%%%%%%%%%
+    ind = find(Unemployment_years == year-1);
     if select_vec_U(2) == 1
         if (isempty(ind) == 0)
-            U_all{t} = [U_all{t} Issizlik_iller(:, ind)];
+            U_all{t} = [U_all{t} Unemployment(:, ind)];
         end
     end
     if select_vec_V(2) == 1
         if (isempty(ind) == 0)
-            V_all{t} = [V_all{t} Issizlik_iller(:, ind)];
+            V_all{t} = [V_all{t} Unemployment(:, ind)];
         end
     end
     
@@ -127,28 +120,28 @@ for t = 1:L_y
     end
     
     %%%%%%%%%%%%%%%%%%% Popularity %%%%%%%%%%%%%%%%%%%
-    ind = find(Nufus_years == year-1);
+    ind = find(Population_years == year-1);
     if select_vec_U(4) == 1
         if (isempty(ind) == 0)
-            U_all{t} = [U_all{t} sum(Goc(:, :, ind))'];
+            U_all{t} = [U_all{t} sum(Migration(:, :, ind))'];
         end
     end
     if select_vec_V(4) == 1
         if (isempty(ind) == 0)
-            V_all{t} = [V_all{t} sum(Goc(:, :, ind))'];
+            V_all{t} = [V_all{t} sum(Migration(:, :, ind))'];
         end
     end
     
-    %%%%%%%%%%%%%%%%%%% Nufus %%%%%%%%%%%%%%%%%%%
-    ind = find(Nufus_years == year-1);
+    %%%%%%%%%%%%%%%%%%% Population %%%%%%%%%%%%%%%%%%%
+    ind = find(Population_years == year-1);
     if select_vec_U(5) == 1
         if (isempty(ind) == 0)
-            U_all{t} = [U_all{t} log(Nufus(:, ind))];
+            U_all{t} = [U_all{t} log(Population(:, ind))];
         end
     end
     if select_vec_V(5) == 1
         if (isempty(ind) == 0)
-            V_all{t} = [V_all{t} log(Nufus(:, ind))];
+            V_all{t} = [V_all{t} log(Population(:, ind))];
         end
     end
     
@@ -179,17 +172,17 @@ for t = 1:L_y
     if select_vec_Z(1) == 1
         z_ind = z_ind + 1;
         if year >= 2004 && year < 2009
-            secim_mtx = Secim2004;
+            election_mtx = Election2004;
         elseif year >= 2009 && year < 2014
-            secim_mtx = Secim2009;
+            election_mtx = Election2009;
         elseif year >= 2014
-            secim_mtx = Secim2014;
+            election_mtx = Election2014;
         end
         if year >= 2004
             D = zeros(N);
             for i = 1:N
                 for j = 1:(i-1)
-                    D(i, j) = 0.5*sum(abs(secim_mtx(i, :) - secim_mtx(j, :)));
+                    D(i, j) = 0.5*sum(abs(election_mtx(i, :) - election_mtx(j, :)));
                 end
             end
             D = (D + D')/100;
@@ -205,19 +198,19 @@ for t = 1:L_y
     
     %%%%%%%%%%%%%%%%%%% Autocorrelation %%%%%%%%%%%%%%%%%%%
     if select_vec_Z(3) == 1
-        ind = find(Nufus_years == year-1);
+        ind = find(Population_years == year-1);
         if isempty(ind) == 0
             z_ind = z_ind + 1;
-            Z_all{t}(:, :, z_ind) = Goc(:, :, ind);
+            Z_all{t}(:, :, z_ind) = Migration(:, :, ind);
         end
     end
     
     %%%%%%%%%%%%%%%%%%% Reciprocity %%%%%%%%%%%%%%%%%%%
     if select_vec_Z(4) == 1
-        ind = find(Nufus_years == year-1);
+        ind = find(Population_years == year-1);
         if isempty(ind) == 0
             z_ind = z_ind + 1;
-            Z_all{t}(:, :, z_ind) = Goc(:, :, ind)'/max(max(Goc(:, :, ind)));
+            Z_all{t}(:, :, z_ind) = Migration(:, :, ind)'/max(max(Migration(:, :, ind)));
         end
     end
     
@@ -230,31 +223,21 @@ for t = 1:L_y
         end
     end
     
-    
     %%%%%%%%%%%%%%%%%%% Construct Y %%%%%%%%%%%%%%%%%%%
-    ind1 = find(Nufus_years == year);
-    ind2 = find(Nufus_years == year-1);
+    ind1 = find(Population_years == year);
+    ind2 = find(Population_years == year-1);
     if (isempty(ind1) == 0) && (isempty(ind2) == 0)
-        Y_all{t} = Goc(:, :, ind1);
+        Y_all{t} = Migration(:, :, ind1);
         % diagonals
-        Y_all{t}((0:N-1)*N + (1:N)) = Nufus(:, ind2) - sum(Y_all{t}, 2);
+        Y_all{t}((0:N-1)*N + (1:N)) = Population(:, ind2) - sum(Y_all{t}, 2);
     end
 end
 
-% Common parameters
-init_year = 6;
-last_year = 15;
-T = last_year - init_year + 1;
-N = 81;
-K1 = sum(select_vec_U);
-K2 = sum(select_vec_V);
-L = sum(select_vec_Z);
-
 %% Get the inputs
-Y = Y_all(init_year:last_year);
-U = U_all(init_year:last_year);
-V = V_all(init_year:last_year);
-Z = Z_all(init_year:last_year);
+Y = Y_all(year_range);
+U = U_all(year_range);
+V = V_all(year_range);
+Z = Z_all(year_range);
 
 %% normalise U's, V's, and Z's
 max_abs_U = zeros(1, K1);
@@ -332,41 +315,116 @@ for l = 1:L
     mean_Z(l) = temp_mean;
 end
 
-
-%% MCMC for the first model (Multinomial)
+%% MCMC for the Multinomial logistic regression model
 if algorithms_to_run(1) == 1
+    % Get the number of iterations
+    M = M_vec(1);
+    range_conv = m_burn(1)+1:M;
+    
     % initial values
-    Theta_init = {ones(1, 1), ones(K1, 1), ones(K2, 1), ones(L, 1)};
+    Theta_init = {ones(K1, 1), ones(K2, 1), ones(L, 1), -5*ones(1, 1), 0*ones(1, 1)};
     
-    % algorithm parameters
-    sigma_prop = 0.01; % proposal std
-    M = 10000; % number of iterations
-    [Theta_samp] = MCMC_goc_model_1(Y, U, V, Z, M, Theta_init, sigma_prop);
+    % proposal parameters
+    prop_params.sigma_prop = 0.015;
+    prop_params.sigma0_a_prop = 0.01;
+    prop_params.sigma0_b_prop = 0.01;
     
+    % run the algorithm
+    [Theta_samp_1] = MCMC_ML_Reg_Migr(Y, U, V, Z, M, Theta_init, prop_params);
+    
+    %%%%% Plot the results %%%%%
+    %%%% Histograms %%%%
     fc = fc + 1; figure(fc);
-    plot(Theta_samp');
-    legend('base', 'GSYH goc verim', 'AKP goc verim',...
-        'issizlik goc verim', 'GSYH goc alim', 'AKP goc alim', 'popularity',...
-        'issizlik goc alim', 'political distance', 'geographical distance', 'last year', 'reciprocity');
+    K_max = max(K1, K2);
+    for i = 1:(K1+K2+L+2)
+        if i <= K1
+            j = selected_factors_U(i);
+            J = K_max;
+        elseif i > K1 && i <= (K1 + K2)
+            j = K_max + selected_factors_V(i - K1);
+            J = K_max;
+        elseif i > (K1+K2) && i <= (K1 + K2 + L)
+            J = L;
+            j = 2*L + (i - K1 - K2);
+        else
+            J = 3;
+            j = 3*3 + (i - K1 - K2 - L);
+        end
+        subplot(4, J, j);
+        histogram(Theta_samp_1(i, range_conv), 20 ,'Normalization', 'probability');
+        set(gca, 'ytick', []);
+        title(legends{1}{i});
+        grid on;
+    end
+    filenametoprint = [Outputdirname 'Multinomial_regression_model_histograms_' date];
+    print(gcf, filenametoprint, '-depsc');
+
+    %%%% Trace plots %%%%
+    fc = fc + 1; figure(fc);
+    K_max = max(K1, K2);
+    for i = 1:(K1+K2+L+2)
+        if i <= K1
+            j = selected_factors_U(i);
+            J = K_max;
+        elseif i > K1 && i <= (K1 + K2)
+            j = K_max + selected_factors_V(i - K1);
+            J = K_max;
+        elseif i > (K1+K2) && i <= (K1 + K2 + L)
+            J = L;
+            j = 2*L + (i - K1 - K2);
+        else
+            J = 3;
+            j = 3*3 + (i - K1 - K2 - L);
+        end
+        subplot(4, J, j);
+        plot(Theta_samp_1(i, :)');
+        title(legends{1}{i});
+        if j <= 4*(J-1)
+            set(gca, 'xtick', []);
+        end
+        grid on;
+        
+    end
+    
+    filenametoprint = [Outputdirname 'Multinomial_regression_model_trace_plots_' date];
+    print(gcf,filenametoprint, '-depsc');
+    
+    %%% Box plots %%%
+    fc = fc + 1; figure(fc);
+    boxplot(Theta_samp_1(1:(K1+K2+L), range_conv)', 'boxstyle', 'outline',...
+        'orientation', 'horizontal', 'labels', legends{1}(1:(K1+K2+L)), ...
+        'factordirection', 'list', 'labelorientation', 'inline',...
+        'outliersize', 0.1);
+    grid on;
+    hold on;
+    plot((-9:9), (K1+0.5)*ones(1, 19), '-.k');
+    plot((-9:9), (K1+K2+0.5)*ones(1, 19), '-.k');
+    plot([0 0], [0 K1 + K2 + L+0.5], 'k');
+    hold off;
+    
+    filenametoprint = [Outputdirname 'Multinomial_regression_model_boxplots_' date];
+    print(gcf,filenametoprint, '-depsc');
+
 end
 
-%% MCMC for the second model (Dirichlet-Multinomial)
+%% MCMC for the Dirichlet-multinomial model with a non-hierarchical specification
 if algorithms_to_run(2) == 1
     Theta_init = {zeros(K1, 1), zeros(K2, 1), zeros(L, 1), ones(1, 1), -5*ones(1, 1), zeros(1, 1)};
     M = M_vec(2);
-    prop_params.sigma_prop = 0.0;
+    range_conv = m_burn(2):M;
+    
+    % proposal parameters
+    prop_params.sigma_prop = 0.015;
     prop_params.sigma_sc_prop = 0.01;
     prop_params.sigma0_a_prop = 0.01;
     prop_params.sigma0_b_prop = 0.01;
 
-    % [Theta_samp_2a] = MCMC_goc_model_2a(Y, U, V, Z, M, Theta_init, prop_params);
+    % run the algorithm
+    [Theta_samp_2a] = MCMC_DM_Reg_Migr(Y, U, V, Z, M, Theta_init, prop_params);
     
-    legends = [legends_U, legends_V, legends_Z, 'scale parameter', 'intercept', 'time slope'];
-    
-    range_conv = (M/2+1):M;
-    
+    %%%% Plot the results %%%% 
+    %%% Histograms %%% 
     D = K1+K2+L+3;
-    
     fc = fc + 1; figure(fc);
     K_max = max(K1, K2);
     for i = 1:(K1+K2+L+1+2)
@@ -386,13 +444,15 @@ if algorithms_to_run(2) == 1
         subplot(4, J, j);
         histogram(Theta_samp_2a(i, range_conv), 20 ,'Normalization', 'probability');
         set(gca, 'ytick', []);
-        title(legends{i});
+        title(legends{2}{i});
         grid on;
     end
-    print(gcf,'full_model_histograms_from_30_May', '-depsc');
     
+    filenametoprint = [Outputdirname 'Dirichlet_Multinomial_model_histograms_' date];
+    print(gcf, filenametoprint, '-depsc');
+    
+    %%% Trace plots %%% 
     fc = fc + 1; figure(fc);
-    range_conv2 = M/10+1:M;
     K_max = max(K1, K2);
     for i = 1:(K1+K2+L+1+2)
         if i <= K1
@@ -409,21 +469,22 @@ if algorithms_to_run(2) == 1
             j = 3*3 + (i - K1 - K2 - L);
         end
         subplot(4, J, j);
-        plot(range_conv2, Theta_samp_2a(i, range_conv2)');
-        title(legends{i});
-        set(gca, 'xlim', [range_conv2(1) range_conv2(end)])
+        plot(Theta_samp_2a(i, :)');
+        title(legends{2}{i});
         if j <= 4*(J-1)
             set(gca, 'xtick', []);
         end
         grid on;
         
     end
-    print(gcf,'full_model_trace_plots_from_30_May', '-depsc');
-
+    
+    %%% Box plots %%% 
+    filenametoprint = [Outputdirname 'Dirichlet_Multinomial_model_trace_plots_' date];
+    print(gcf,filenametoprint, '-depsc');
     
     fc = fc + 1; figure(fc);
     boxplot(Theta_samp_2a(1:(K1+K2+L), range_conv)', 'boxstyle', 'outline',...
-        'orientation', 'horizontal', 'labels', legends(1:(K1+K2+L)), ...
+        'orientation', 'horizontal', 'labels', legends{2}(1:(K1+K2+L)), ...
         'factordirection', 'list', 'labelorientation', 'inline',...
         'outliersize', 0.1);
     grid on;
@@ -432,15 +493,15 @@ if algorithms_to_run(2) == 1
     plot((-9:9), (K1+K2+0.5)*ones(1, 19), '-.k');
     plot([0 0], [0 K1 + K2 + L+0.5], 'k');
     hold off;
-    print(gcf,'full_model_boxplots_from_30_May', '-depsc');
     
+    filenametoprint = [Outputdirname 'Dirichlet_Multinomial_model_boxplots_' date];
+    print(gcf,filenametoprint, '-depsc');
     
-    % Get the mean, std, and quantiles
+    %%%% Collect posterior mean, std, and quantiles %%%%
     m_2a = zeros(1, D);
     s_2a = zeros(1, D);
     p1_2a = zeros(1, D);
     p2_2a = zeros(1, D);
-
     
     for i = 1:D
         m_2a(i) = mean(Theta_samp_2a(i, range_conv));
@@ -448,48 +509,42 @@ if algorithms_to_run(2) == 1
         p1_2a(i) = quantile(Theta_samp_2a(i, range_conv), 0.05);
         p2_2a(i) = quantile(Theta_samp_2a(i, range_conv), 0.95);
     end
-    
-
 end
 
-%% MCMC for the second model, but with different bases and year effects for provinces
+%% MCMC for the Dirichlet-multinomial model with a hierarchical specification
+
 set(0,'DefaultAxesTitleFontWeight','normal');
 
 if algorithms_to_run(3) == 1
 
     Theta_init = {zeros(K1, 1), zeros(K2, 1), zeros(L, 1), ones(1, 1), ...
         -5*ones(N, 1), zeros(N, 1), [-5; 1], [0; 1]};
-    
-%     Theta_init = {Theta_samp_2a_ext(1:K1, end), Theta_samp_2a_ext(K1+1:K1+K2, end),...
-%         Theta_samp_2a_ext(K1+K2+1:K1+K2+L, end), Theta_samp_2a_ext(K1+K2+L+1, end), ...
-%         Theta_samp_2a_ext(K1+K2+L+1+(1:N), end), Theta_samp_2a_ext(K1+K2+L+1+N+(1:N), end),...
-%         Theta_samp_2a_ext(K1+K2+L+1+2*N+(1:2), end), Theta_samp_2a_ext(K1+K2+L+1+2*N+(3:4), end)};
-    
-%     load('Theta_init_for_2a');
-    
+        
     M = M_vec(3);
-    prop_params.sigma_prop = 0;
+    range_conv = m_burn(3):M;
+    
+    % Proposal parameters
+    prop_params.sigma_prop = 0.015;
     prop_params.sigma_sc_prop = 0.01;
     prop_params.sigma0_a_prop = 0.01;
     prop_params.sigma0_b_prop = 0.001;
     
+    % Prior parameters
     prior_params.mu0_a = 0;
     prior_params.var0_a = 100;
     prior_params.alpha0_a = 0.01;
     prior_params.beta0_a = 0.01;
-    
     prior_params.mu0_b = 0;
     prior_params.var0_b = 100;
     prior_params.alpha0_b = 0.01;
     prior_params.beta0_b = 0.01;
     
+    % run the algorithm
     [Theta_samp_2a_ext, Dec_vec_a, Dec_vec_b] ...
-        = MCMC_goc_model_2a_diff_base(Y, U, V, Z, M, Theta_init, prop_params, prior_params);
+        = MCMC_DM_Reg_Migr_hier(Y, U, V, Z, M, Theta_init, prop_params, prior_params);
     
-
+    %%%% Plot the results %%%%
     D = (K1+K2+L)+1+2*N+4;
-    
-    %%% Plot the results
     range_U = 1:K1;
     range_V = (K1+1):(K1+K2);
     range_Z = (K1+K2+1):(K1+K2+L);
@@ -498,10 +553,61 @@ if algorithms_to_run(3) == 1
     range_0b = (K1+K2+L)+1+N+(1:N);
     range_ha = (K1+K2+L)+1+2*N+(1:2);
     range_hb = (K1+K2+L)+1+2*N+(3:4);
-    range_conv = (round(M/5)+1):M;
     
-    legends = [legends_U, legends_V, legends_Z, 'scale parameter'];
+    %%% Histograms %%%
+    fc = fc + 1; figure(fc);
+    J = ceil((K1+K2+L+1)/4);
+    for i = 1:K1+K2+L
+        if i <= K1
+            j = selected_factors_U(i);
+            J = K_max;
+        elseif i > K1 && i <= (K1 + K2)
+            j = K_max + selected_factors_V(i - K1);
+            J = K_max;
+        elseif i > (K1+K2) && i <= (K1 + K2 + L+1)
+            j = 2*L + (i - K1 - K2);
+            J = L;
+        end
+        subplot(4, J, j);
+        histogram(Theta_samp_2a_ext(i, range_conv)', 20,...
+            'Normalization', 'probability');
+        title(legends{3}{i});
+        set(gca, 'ytick', []);
+        grid on;
+    end
+    subplot(4, 5, 3*5 + 1);
+    histogram(Theta_samp_2a_ext(K1+K2+L+1, range_conv), 20,...
+        'Normalization', 'probability');
+    set(gca, 'ytick', []);
+    title('scale parameter');
     
+    subplot(4, 5, 3*5 + 2);
+    histogram(Theta_samp_2a_ext(range_ha(1), range_conv), 20,...
+        'Normalization', 'probability');
+    set(gca, 'ytick', []);
+    title('intercept: mean');
+    
+    subplot(4, 5, 3*5 + 3);
+    histogram(Theta_samp_2a_ext(range_ha(2), range_conv),  20,...
+        'Normalization', 'probability');
+    set(gca, 'ytick', []);
+    title('intercept: variance');
+    
+    subplot(4, 5, 3*5 + 4);
+    histogram(Theta_samp_2a_ext(range_hb(1), range_conv),  20, ...
+        'Normalization', 'probability');
+    set(gca, 'ytick', []);
+    title('time slope: mean');
+    
+    subplot(4, 5, 3*5 + 5);
+    histogram(Theta_samp_2a_ext(range_hb(2), :),  20 ,'Normalization', 'probability');
+    set(gca, 'ytick', []);
+    title('time slope: variance');
+    
+    filenametoprint = [Outputdirname 'Dirichlet_Multinomial_model_hier_histograms_' date];
+    print(gcf,filenametoprint, '-depsc');
+    
+    %%% Trace plots %%%
     fc = fc + 1; figure(fc);
     K_max = max(K1, K2);
     for i = 1:K1+K2+L
@@ -517,7 +623,7 @@ if algorithms_to_run(3) == 1
         end
         subplot(4, J, j);
         plot(Theta_samp_2a_ext(i, :)');
-        title(legends{i});
+        title(legends{3}{i});
         set(gca, 'xtick', [], 'xticklabel', [], 'xlim', [0, M]);
         grid on;
     end
@@ -558,60 +664,26 @@ if algorithms_to_run(3) == 1
     set(gca, 'xlim', [0, M]);
     title('time slope: prior variance (10^{-3})');
 
-    print(gcf,'full_extended_model_trace_plots_from_30_May', '-depsc');
+    filenametoprint = [Outputdirname 'Dirichlet_Multinomial_model_hier_trace_plots_' date];
+    print(gcf,filenametoprint, '-depsc');
     
+    %%% Box plots %%%
     fc = fc + 1; figure(fc);
-    J = ceil((K1+K2+L+1)/4);
-    for i = 1:K1+K2+L
-        if i <= K1
-            j = selected_factors_U(i);
-            J = K_max;
-        elseif i > K1 && i <= (K1 + K2)
-            j = K_max + selected_factors_V(i - K1);
-            J = K_max;
-        elseif i > (K1+K2) && i <= (K1 + K2 + L+1)
-            j = 2*L + (i - K1 - K2);
-            J = L;
-        end
-        subplot(4, J, j);
-        histogram(Theta_samp_2a_ext(i, range_conv)', 20,...
-            'Normalization', 'probability');
-        title(legends{i});
-        set(gca, 'ytick', []);
-        grid on;
-    end
-    subplot(4, 5, 3*5 + 1);
-    histogram(Theta_samp_2a_ext(K1+K2+L+1, range_conv), 20,...
-        'Normalization', 'probability');
-    set(gca, 'ytick', []);
-    title('scale parameter');
+    boxplot(Theta_samp_2a_ext(1:(K1+K2+L), range_conv)', 'boxstyle', 'outline',...
+        'orientation', 'horizontal', 'labels', legends{3}(1:(K1+K2+L)), ...
+        'factordirection', 'list', 'labelorientation', 'inline',...
+        'outliersize', 0.1);
+    grid on;
+    hold on;
+    plot((-9:9), (K1+0.5)*ones(1, 19), '-.k');
+    plot((-9:9), (K1+K2+0.5)*ones(1, 19), '-.k');
+    plot([0 0], [0 K1 + K2 + L+0.5], 'k');
+    hold off;
     
-    subplot(4, 5, 3*5 + 2);
-    histogram(Theta_samp_2a_ext(range_ha(1), range_conv), 20,...
-        'Normalization', 'probability');
-    set(gca, 'ytick', []);
-    title('intercept: mean');
+    filenametoprint = [Outputdirname 'Dirichlet_Multinomial_model_hier_boxplots_' date];
+    print(gcf,filenametoprint, '-depsc');
     
-    subplot(4, 5, 3*5 + 3);
-    histogram(Theta_samp_2a_ext(range_ha(2), range_conv),  20,...
-        'Normalization', 'probability');
-    set(gca, 'ytick', []);
-    title('intercept: variance');
-    
-    subplot(4, 5, 3*5 + 4);
-    histogram(Theta_samp_2a_ext(range_hb(1), range_conv),  20, ...
-        'Normalization', 'probability');
-    set(gca, 'ytick', []);
-    title('time slope: mean');
-    
-    subplot(4, 5, 3*5 + 5);
-    histogram(Theta_samp_2a_ext(range_hb(2), :),  20 ,'Normalization', 'probability');
-    set(gca, 'ytick', []);
-    title('time slope: variance');
-    
-    print(gcf,'full_extended_model_histograms_from_30_May', '-depsc');
-    
-    
+    %%% Box plots for the intercept and slope parameters %%%
     fc = fc + 1; figure(fc);
     % Sort the provinces according to the values of their base parameters
     [~, b] = sort(mean(Theta_samp_2a_ext(range_0a, range_conv), 2));
@@ -630,8 +702,11 @@ if algorithms_to_run(3) == 1
         'XTickLabelRotation', 45, 'fontsize', 7);
     ylabel('time slope', 'fontsize', 10);
     grid on;
-    print(gcf,'full_extended_intercept_and_time_slope_from_30_May', '-depsc');
-    
+
+    filenametoprint = [Outputdirname 'Dirichlet_Multinomial_model_hier_intercept_and_time_slope_' date];
+    print(gcf,filenametoprint, '-depsc');
+
+    %%% Intercept + (t-1)*slope at the initial and last years %%%
     [~, b1] = sort(mean(Theta_samp_2a_ext(range_0a, range_conv), 2));
     [~, b2] = sort(mean(Theta_samp_2a_ext(range_0a, range_conv), 2) ...
         + mean(Theta_samp_2a_ext(range_0b, range_conv), 2)*(T-1));
@@ -651,21 +726,10 @@ if algorithms_to_run(3) == 1
     set(gca, 'ytick', 1:81, 'yticklabel', Iller(b2), ...
         'ytickLabelRotation', 45, 'ylim', [0, 82], 'fontsize', 7);
     
-    fc = fc + 1; figure(fc);
-    boxplot(Theta_samp_2a_ext(1:(K1+K2+L), range_conv)', 'boxstyle', 'outline',...
-        'orientation', 'horizontal', 'labels', legends(1:(K1+K2+L)), ...
-        'factordirection', 'list', 'labelorientation', 'inline',...
-        'outliersize', 0.1);
-    grid on;
-    hold on;
-    plot((-9:9), (K1+0.5)*ones(1, 19), '-.k');
-    plot((-9:9), (K1+K2+0.5)*ones(1, 19), '-.k');
-    plot([0 0], [0 K1 + K2 + L+0.5], 'k');
-    hold off;
+    filenametoprint = [Outputdirname 'Dirichlet_Multinomial_model_hier_init_and_last_years_' date];
+    print(gcf,filenametoprint, '-depsc');
     
-    print(gcf,'full_extended_model_boxplots_from_30_May', '-depsc');
-    
-    % Get the mean, std, and quantiles
+    %%% Get the posterior mean, std, and quantiles %%%
     m_2a_ext = zeros(1, D);
     s_2a_ext = zeros(1, D);
     p1_2a_ext = zeros(1, D);
@@ -676,32 +740,4 @@ if algorithms_to_run(3) == 1
         p1_2a_ext(i) = quantile(Theta_samp_2a_ext(i, range_conv), 0.05);
         p2_2a_ext(i) = quantile(Theta_samp_2a_ext(i, range_conv), 0.95);
     end
-end
-
-%%
-mig_rate  = zeros(N, T);
-mig_prob_est_2a = zeros(N, T);
-mig_prob_est_2a_ext = zeros(N, T);
-
-for t = 1:T
-    Theta_base_2a = Theta_samp_2a(K1+K2+L+2, range_conv) ...
-        + (t-1)*Theta_samp_2a(K1+K2+L+3, range_conv);
-    mig_prob_est_2a(:, t) = mean(exp(Theta_base_2a)*(N-1)...
-        ./(1 + exp(Theta_base_2a)*(N-1)))*ones(N, 1);
-    
-    Theta_base_2a_ext = Theta_samp_2a_ext(range_0a, range_conv) ...
-        + (t-1)*Theta_samp_2a_ext(range_0b, range_conv);
-    mig_prob_est_2a_ext(:, t) = mean(exp(Theta_base_2a_ext)*(N-1)...
-        ./(1 + exp(Theta_base_2a_ext)*(N-1)), 2);
-    
-    mig_rate(:, t) = (sum(Y{t}, 2) - diag(Y{t}))./sum(Y{t}, 2);
-    
-end
-
-fc = fc + 1; figure(fc);
-plot(mig_prob_est_2a, 'k')
-hold on;
-plot(mig_prob_est_2a_ext, 'r')
-plot(mig_rate, 'b')
-hold off;
-    
+end    

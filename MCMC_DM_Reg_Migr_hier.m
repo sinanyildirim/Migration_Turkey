@@ -1,7 +1,7 @@
-function [Theta_samp, Dec_vec_a, Dec_vec_b] = MCMC_goc_model_2a_diff_base(Y, U, V, Z, M, Theta_init, prop_params, prior_params)
+function [Theta_samp, Dec_vec_a, Dec_vec_b] = MCMC_DM_Reg_Migr_hier(Y, U, V, Z, M, Theta_init, prop_params, prior_params)
 
-% [output] = MCMC_goc_model1(Y, U, Z, M, theta_init, sigma_prop)
-
+% [output] = MCMC_DM_Reg_Migr_hier(Y, U, V, Z, M, Theta_init, prop_params, prior_params)
+%
 % Y is a (T x 1) cell array, each cell contains a matrix of size (N x N)
 % Y{t}(i, j): # people migrating from city i to city j.
 %
@@ -87,16 +87,9 @@ for m = 1:M
     % calculate the log-likelihood
     [log_lkl_prop, log_lkl_vec_prop] = calculate_log_lkl_goc(Y, U, V, Z, ...
         Theta_prop, T, N, L, 2);
-    
-%     disp([log_lkl-sum(log_lkl_vec)]);
-%     
-%     disp([log_lkl_prop-sum(log_lkl_vec_prop)]);
-    
+        
     log_r = log_lkl_prop - log_lkl;
-    
-%     disp([log_r sum(log_lkl_vec_prop) - sum(log_lkl_vec)]);
-    % log_lkl
-    % decision
+
     if rand < exp(log_r)
         theta1 = theta1_prop;
         theta2 = theta2_prop;

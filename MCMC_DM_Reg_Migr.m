@@ -1,7 +1,7 @@
-function [Theta_samp] = MCMC_goc_model_2a(Y, U, V, Z, M, Theta_init, prop_params)
+function [Theta_samp] = MCMC_DM_Reg_Migr(Y, U, V, Z, M, Theta_init, prop_params)
 
-% [output] = MCMC_goc_model1(Y, U, Z, M, theta_init, sigma_prop)
-
+% [output] = MCMC_DM_Reg_Migr(Y, U, V, Z, M, Theta_init, prop_params)
+%
 % Y is a (T x 1) cell array, each cell contains a matrix of size (N x N)
 % Y{t}(i, j): # people migrating from city i to city j.
 %

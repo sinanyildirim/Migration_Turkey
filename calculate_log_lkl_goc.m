@@ -3,10 +3,12 @@ function [log_lkl, log_lkl_vec] = calculate_log_lkl_goc(Y, U, V, Z, Thetas,...
 
 if model_type == 1 % This is the Multinomial model
     
-    theta0 = Thetas{1};
-    theta1 = Thetas{2};
-    theta2 = Thetas{3};
-    theta3 = Thetas{4};
+    theta1 = Thetas{1};
+    theta2 = Thetas{2};
+    theta3 = Thetas{3};
+    theta0a = Thetas{4};
+    theta0b = Thetas{4};
+    
     log_lkl = 0;
     log_lkl_vec = zeros(N, 1);
     
@@ -16,7 +18,7 @@ if model_type == 1 % This is the Multinomial model
         
         Z_t_2D = reshape(Z{t}, N*N, L);
         
-        log_prob_mtx = theta0 + u*ones(1, N) + ones(N, 1)*v' + reshape(Z_t_2D*theta3, N, N);
+        log_prob_mtx = theta0a + (t-1)*theta0b + u*ones(1, N) + ones(N, 1)*v' + reshape(Z_t_2D*theta3, N, N);
         log_prob_mtx((0:N-1)*N + (1:N)) = 0;
         
         % normalise the log-probabilities
