@@ -1,9 +1,48 @@
+% This is the main code for the experiments for the paper entitled
+% "A model of dynamic migration networks: Explaining Turkey's 
+% inter-provincial migration flows"
+% by 
+% Ozan Aksoy and Sinan Yıldırım.
+% 
+% Three different models are fitted to the available data:
+% 1) Multinomial Logistic regression model
+% 2) Dirichlet-multinomial model with a non-hierarchical specification for
+% its intercept and slope parameters
+% 3) Dirichlet-multinomial model with a hierarchical specification for
+% its intercept and slope parameters
+% 
+% All the models aim to explain migration probabilities by fitting a
+% certain regression function whose explanatory variables are various 
+% social, economical, political, and geographical factors.
+%
+% The section of this file named "Algorithm specifications..." has all the
+% essential options to be played with by the user, such as
+% 
+% - The subset of the models to be fitted to the model,
+% - Numbers of iterations, and burn-in time
+% - Factors (explanatory variables) to be included in the model
+% - The year range for during the migration data are to used.
+% 
+% Other critical, but less managerial, choices are the proposal variances,
+% and prior distributions, which are further down the script.
+%
+% The user is further guided through the script by comments around the
+% code.
+% 
+% Wrıtten by: Sinan Yıldırım, Ozan Aksoy
+% Last update: 18 June 2020
+
+%%
 clear; clc; close all; fc = 0;
 
-Outputdirname = 'Outputfiles/'; % This is where the output files are going to be saved
+seed_no = 1; rng(seed_no); % use this (change seed_no) if you want to 
+% control the seed
+
+Outputdirname = 'Outputfiles/'; % This is where the figures are saved
 if ~exist(Outputdirname, 'dir')
    mkdir(Outputdirname)
 end
+set(0,'DefaultAxesTitleFontWeight','normal');
 
 %% load the data from the data files
 load('Datafiles/external_data', 'ilmesafe_abc_abc', 'Iller');
@@ -22,7 +61,6 @@ Migration(isnan(Migration)) = 0;
 N = 81; % number of provinces
 
 %% Algorithm specifications: Choose factors, algorithms to run, algorithm parameters, etc
-
 algorithms_to_run = [1 1 1]; % make the corresponding index one for the 
 % algorithms you want to run
 M_vec = [1000 1000 1000]; % numbers of iterations
@@ -356,6 +394,7 @@ if algorithms_to_run(1) == 1
         title(legends{1}{i});
         grid on;
     end
+    sgtitle('Multinomial regression model - histograms');
     filenametoprint = [Outputdirname 'Multinomial_regression_model_histograms_' date];
     print(gcf, filenametoprint, '-depsc');
 
@@ -384,8 +423,8 @@ if algorithms_to_run(1) == 1
         end
         grid on;
         
-    end
-    
+    end    
+    sgtitle('Multinomial regression model - trace plots');
     filenametoprint = [Outputdirname 'Multinomial_regression_model_trace_plots_' date];
     print(gcf,filenametoprint, '-depsc');
     
@@ -401,6 +440,7 @@ if algorithms_to_run(1) == 1
     plot((-9:9), (K1+K2+0.5)*ones(1, 19), '-.k');
     plot([0 0], [0 K1 + K2 + L+0.5], 'k');
     hold off;
+    sgtitle('Multinomial regression model - box plots');
     
     filenametoprint = [Outputdirname 'Multinomial_regression_model_boxplots_' date];
     print(gcf,filenametoprint, '-depsc');
@@ -447,6 +487,7 @@ if algorithms_to_run(2) == 1
         title(legends{2}{i});
         grid on;
     end
+    sgtitle('Dirichlet-multinomial model (non-hier) - histograms');
     
     filenametoprint = [Outputdirname 'Dirichlet_Multinomial_model_histograms_' date];
     print(gcf, filenametoprint, '-depsc');
@@ -477,11 +518,11 @@ if algorithms_to_run(2) == 1
         grid on;
         
     end
-    
-    %%% Box plots %%% 
+    sgtitle('Dirichlet-multinomial model (non-hier) - trace plots');
     filenametoprint = [Outputdirname 'Dirichlet_Multinomial_model_trace_plots_' date];
     print(gcf,filenametoprint, '-depsc');
     
+    %%% Box plots %%% 
     fc = fc + 1; figure(fc);
     boxplot(Theta_samp_2a(1:(K1+K2+L), range_conv)', 'boxstyle', 'outline',...
         'orientation', 'horizontal', 'labels', legends{2}(1:(K1+K2+L)), ...
@@ -493,6 +534,7 @@ if algorithms_to_run(2) == 1
     plot((-9:9), (K1+K2+0.5)*ones(1, 19), '-.k');
     plot([0 0], [0 K1 + K2 + L+0.5], 'k');
     hold off;
+    sgtitle('Dirichlet-multinomial model (non-hier) - box plots');
     
     filenametoprint = [Outputdirname 'Dirichlet_Multinomial_model_boxplots_' date];
     print(gcf,filenametoprint, '-depsc');
@@ -512,9 +554,6 @@ if algorithms_to_run(2) == 1
 end
 
 %% MCMC for the Dirichlet-multinomial model with a hierarchical specification
-
-set(0,'DefaultAxesTitleFontWeight','normal');
-
 if algorithms_to_run(3) == 1
 
     Theta_init = {zeros(K1, 1), zeros(K2, 1), zeros(L, 1), ones(1, 1), ...
@@ -524,7 +563,14 @@ if algorithms_to_run(3) == 1
     range_conv = m_burn(3):M;
     
     % Proposal parameters
-    prop_params.sigma_prop = 0.015;
+    if run_empty == 0
+        prop_params.sigma_prop = 0.015;
+    else
+        prop_params.sigma_prop = 0;
+        Theta_init{1} = zeros(K1, 1);
+        Theta_init{2} = zeros(K2, 1);
+        Theta_init{3} = zeros(L, 1);
+    end 
     prop_params.sigma_sc_prop = 0.01;
     prop_params.sigma0_a_prop = 0.01;
     prop_params.sigma0_b_prop = 0.001;
@@ -603,6 +649,7 @@ if algorithms_to_run(3) == 1
     histogram(Theta_samp_2a_ext(range_hb(2), :),  20 ,'Normalization', 'probability');
     set(gca, 'ytick', []);
     title('time slope: variance');
+    sgtitle('Dirichlet-multinomial model (hier) - histograms');
     
     filenametoprint = [Outputdirname 'Dirichlet_Multinomial_model_hier_histograms_' date];
     print(gcf,filenametoprint, '-depsc');
@@ -663,6 +710,7 @@ if algorithms_to_run(3) == 1
     plot(Theta_samp_2a_ext(range_hb(2), :)*1000');
     set(gca, 'xlim', [0, M]);
     title('time slope: prior variance (10^{-3})');
+    sgtitle('Dirichlet-multinomial model (hier) - trace plots');
 
     filenametoprint = [Outputdirname 'Dirichlet_Multinomial_model_hier_trace_plots_' date];
     print(gcf,filenametoprint, '-depsc');
@@ -680,6 +728,7 @@ if algorithms_to_run(3) == 1
     plot([0 0], [0 K1 + K2 + L+0.5], 'k');
     hold off;
     
+    sgtitle('Dirichlet-multinomial model (hier) - box plots');
     filenametoprint = [Outputdirname 'Dirichlet_Multinomial_model_hier_boxplots_' date];
     print(gcf,filenametoprint, '-depsc');
     
