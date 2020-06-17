@@ -23,6 +23,9 @@
 % - Factors (explanatory variables) to be included in the model
 % - The year range for during the migration data are to used.
 % 
+% If you want to run an empty version of the Dirichlet-Multinomial model 
+% with the hierarchical setting, set empty_run to 1.
+%
 % Other critical, but less managerial, choices are the proposal variances,
 % and prior distributions, which are further down the script.
 %
@@ -63,7 +66,7 @@ N = 81; % number of provinces
 %% Algorithm specifications: Choose factors, algorithms to run, algorithm parameters, etc
 algorithms_to_run = [1 1 1]; % make the corresponding index one for the 
 % algorithms you want to run
-M_vec = [1000 1000 1000]; % numbers of iterations
+M_vec = [500000 500000 500000]; % numbers of iterations
 m_burn = round(M_vec/5);
 run_empty = 0; % make this 1 if you want to run the empty model
 
