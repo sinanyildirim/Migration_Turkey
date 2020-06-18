@@ -1,4 +1,4 @@
-# GocTurkey_SocNet
+# Migration_Turkey
 This repo contains the dataset and the code that generates the results reported in the paper entitled
 "A model of dynamic migration networks: Explaining Turkey's inter-provincial migration flows"
 
