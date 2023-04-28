@@ -21,6 +21,7 @@
 % The user is further guided through the script by comments around the
 % code.
 %
+% Sinan Yildirim
 % Last update: 22 April 2023
 
 %% Preamble
